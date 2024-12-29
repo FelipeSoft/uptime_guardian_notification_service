@@ -5,6 +5,7 @@ type Alert struct {
 	Subject     string
 	Content     string
 	Destination []*Destination
+	Status      string
 }
 
 func NewAlert(ID uint, Subject string, Content string, Destination []*Destination) *Alert {
