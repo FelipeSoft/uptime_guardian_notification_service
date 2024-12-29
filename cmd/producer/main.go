@@ -8,13 +8,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"github.com/FelipeSoft/uptime_guardian_notification_service/internal/infrastructure/kafka"
 	"github.com/joho/godotenv"
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -23,16 +22,8 @@ func main() {
 	godotenv.Load("./../../.env")
 	topic := "websocket_gateway_to_notification_service"
 
-	producer, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": os.Getenv("KAFKA_BOOTSTRAP_SERVER"),
-	})
-
-	if err != nil {
-		log.Fatalf("error on producer creation: %s", err.Error())
-	}
+	producer := kafka.NewKafkaProducer()
 	defer producer.Close()
-
-	fmt.Println("the producer is running...")
 
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
@@ -47,15 +38,13 @@ func main() {
 		cancel()
 	}()
 
+	fmt.Println("Kafka Producer is running...")
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
-			err := producer.Produce(&kafka.Message{
-				TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-				Key:            nil,
-				Value:          []byte(fmt.Sprintf("hello from message %d", i)),
-			}, nil)
+			err := producer.Publish(&topic, "", "hello")
 			if err != nil {
 				fmt.Printf("error on producing message: %s", err.Error())
 				continue
@@ -68,16 +57,9 @@ func main() {
 		defer ctx.Done()
 		<-ctx.Done()
 		fmt.Println("Producer shutting down...")
+		os.Exit(0)
 	}()
 	wg.Wait()
-
-	fmt.Println("Flushing pending messages...")
-	unflushed := producer.Flush(15 * 1000)
-	if unflushed > 0 {
-		fmt.Printf("Warning: %d messages were not flushed\n", unflushed)
-	} else {
-		fmt.Println("All messages flushed successfully.")
-	}
 
 	fmt.Println("Shut down completed!")
 }

@@ -8,13 +8,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
-
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
+	"github.com/FelipeSoft/uptime_guardian_notification_service/internal/infrastructure/kafka"
 	"github.com/joho/godotenv"
 )
 
@@ -23,24 +21,9 @@ func main() {
 	topic := "websocket_gateway_to_notification_service"
 
 	workersCount := 10
-	consumer, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": os.Getenv("KAFKA_BOOTSTRAP_SERVER"),
-		"group.id":          os.Getenv("KAFKA_GROUP_ID"),
-	})
-
-	if err != nil {
-		log.Fatalf("error on consumer creation: %s", err.Error())
-	}
-
+	consumer := kafka.NewKafkaConsumer()
+	consumer.Subscribe(topic)
 	defer consumer.Close()
-
-	err = consumer.Subscribe(topic, nil)
-
-	if err != nil {
-		log.Fatalf("error on topic subscribing: %s", err.Error())
-	}
-
-	fmt.Println("the consumer is running...")
 
 	// should ordering the messages before send to app client
 	var wg sync.WaitGroup
@@ -57,6 +40,8 @@ func main() {
 		cancel()
 	}()
 
+	fmt.Println("Kafka Consumer is running...")
+
 	for w := 0; w < workersCount; w++ {
 		wg.Add(1)
 		go func(workerId int) {
@@ -67,7 +52,7 @@ func main() {
 					fmt.Printf("Worker %d shutting down...\n", workerId)
 					return
 				default:
-					msg, err := consumer.ReadMessage(-1)
+					msg, err := consumer.Consume()
 					if err != nil {
 						fmt.Printf("\n error on reading message: %s", err.Error())
 						continue
